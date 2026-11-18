@@ -1,0 +1,5 @@
+.DS_Store
+.env
+.env.*
+/PROCONTEL_COMPLETO copy.sql
+/PROCONTEL POSTGRES/procontel_load_postgresql.sql
