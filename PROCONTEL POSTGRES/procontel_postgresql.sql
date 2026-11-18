@@ -1,6 +1,4 @@
--- ============================================================================
 --  PROCONTEL  -  Inventory Traceability System  (PostgreSQL port)
--- ============================================================================
 --  A field-operations inventory and equipment-traceability database for a
 --  telecom subcontractor. Originally designed and implemented in SQL Server
 --  (T-SQL); this file is a clean PostgreSQL 14+ port intended as a portfolio
@@ -29,22 +27,16 @@
 --
 --  Run order is top-to-bottom. The script creates objects in an empty schema;
 --  it does not create the database itself (run: CREATE DATABASE procontel;).
--- ============================================================================
 
 
 
--- ############################################################################
 -- SECTION A  -  SCHEMA
--- ############################################################################
 
--- ============================================================================
 -- PROCONTEL - Inventory Traceability System
--- ----------------------------------------------------------------------------
 -- Target engine : PostgreSQL 14+
 -- Domain        : Field-operations inventory & equipment traceability for a
 --                 telecom subcontractor serving a national ISP.
 -- Author        : Eduardo  (portfolio project, originally authored in T-SQL)
--- ============================================================================
 -- This script is a PostgreSQL port of a SQL Server design. It is meant as a
 -- portfolio artifact: it demonstrates relational modeling (RBAC, transactional
 -- inventory flow, auditing), constraint design, stored routines, triggers and
@@ -56,11 +48,8 @@
 --   03_triggers.sql -> Audit triggers
 --   04_views.sql    -> Dimension / fact / KPI views for BI consumption
 --   05_seed_rbac.sql-> Initial roles & permissions (system data, not test data)
--- ============================================================================
 
--- ----------------------------------------------------------------------------
 -- SECTION 1: SECURITY & ACCESS CONTROL (RBAC)
--- ----------------------------------------------------------------------------
 
 CREATE TABLE roles (
     role_id      INT          GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -110,9 +99,7 @@ CREATE TABLE user_roles (
 );
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 2: MASTER CATALOGS
--- ----------------------------------------------------------------------------
 
 -- Technicians. crew_code follows the company pattern PRO06..PRO999.
 CREATE TABLE technicians (
@@ -188,9 +175,7 @@ CREATE TABLE materials (
 );
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 3: TRANSACTIONAL TABLES
--- ----------------------------------------------------------------------------
 
 -- Work orders (service requests coming from the ISP)
 CREATE TABLE work_orders (
@@ -372,9 +357,7 @@ CREATE INDEX ix_equipment_transfers_source  ON equipment_transfers (source_techn
 CREATE INDEX ix_equipment_transfers_target  ON equipment_transfers (target_technician_id, transferred_at DESC);
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 4: AUDITING
--- ----------------------------------------------------------------------------
 
 -- Append-only audit log. Intentionally has NO foreign keys: it must survive
 -- even if the referenced rows are later removed, and it spans many tables.
@@ -392,9 +375,7 @@ CREATE TABLE audit_log (
 );
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 5: SUPPORTING INDEXES
--- ----------------------------------------------------------------------------
 
 CREATE INDEX ix_audit_log_table_date ON audit_log (affected_table, logged_at DESC);
 CREATE INDEX ix_audit_log_user       ON audit_log (user_login, logged_at DESC);
@@ -417,13 +398,9 @@ CREATE INDEX ix_role_permissions_permission   ON role_permissions (permission_id
 -- Filtered index: only users that are also technicians
 CREATE INDEX ix_users_technician ON users (technician_id) WHERE technician_id IS NOT NULL;
 
--- ############################################################################
 -- SECTION B  -  ROUTINES
--- ############################################################################
 
--- ============================================================================
 -- PROCONTEL - Stored routines (functions & procedures)
--- ----------------------------------------------------------------------------
 -- PostgreSQL 14+. Port of the original T-SQL stored procedures.
 --
 -- Design notes for reviewers:
@@ -434,12 +411,9 @@ CREATE INDEX ix_users_technician ON users (technician_id) WHERE technician_id IS
 --   * Error handling uses RAISE EXCEPTION with SQLSTATE; multi-table writes run
 --     inside the implicit routine transaction and roll back on any exception.
 --   * The audit helper writes to audit_log; SECURITY/business routines call it.
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 0: COMPOSITE TYPES (replacement for SQL Server TVPs)
--- ----------------------------------------------------------------------------
 
 -- A list of serialized units (e.g. equipment handed out on an invoice)
 CREATE TYPE serial_item AS (
@@ -453,9 +427,7 @@ CREATE TYPE material_item AS (
 );
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 1: AUDIT HELPER
--- ----------------------------------------------------------------------------
 
 -- Central helper every write routine calls to leave a trace in audit_log.
 CREATE PROCEDURE sp_write_audit(
@@ -483,9 +455,7 @@ END;
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 2: SECURITY & RBAC
--- ----------------------------------------------------------------------------
 
 -- Authenticate a user. Returns the account row if valid; raises otherwise.
 -- Deliberately does not reveal whether the login or the password was wrong.
@@ -726,15 +696,11 @@ LANGUAGE sql
 AS $$
     SELECT * FROM permissions ORDER BY module, permission_code;
 $$;
--- ============================================================================
 -- PROCONTEL - Stored routines, part 2: master-catalog CRUD
 -- (technicians, users, serialized equipment, materials)
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 3: TECHNICIANS
--- ----------------------------------------------------------------------------
 
 -- Insert a technician; returns the new internal id.
 CREATE FUNCTION fn_create_technician(
@@ -868,9 +834,7 @@ LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 4: USERS
--- ----------------------------------------------------------------------------
 
 -- Insert a user. The password arrives already hashed from the application.
 CREATE FUNCTION fn_create_user(
@@ -960,9 +924,7 @@ LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 5: SERIALIZED EQUIPMENT
--- ----------------------------------------------------------------------------
 
 -- Receive one unit into the warehouse.
 CREATE PROCEDURE sp_receive_equipment(
@@ -1057,9 +1019,7 @@ LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 6: MATERIALS
--- ----------------------------------------------------------------------------
 
 CREATE PROCEDURE sp_create_material(
     p_material_code   VARCHAR(15),
@@ -1144,9 +1104,7 @@ RETURNS SETOF materials LANGUAGE sql AS $$
     SELECT * FROM materials
      WHERE warehouse_stock < p_threshold ORDER BY warehouse_stock;
 $$;
--- ============================================================================
 -- PROCONTEL - Stored routines, part 3: transactional business logic
--- ----------------------------------------------------------------------------
 -- The interesting part of the project. These routines coordinate multiple
 -- tables atomically: a failure anywhere raises an exception and the whole
 -- routine's implicit transaction rolls back.
@@ -1157,12 +1115,9 @@ $$;
 --     orders worked but not yet put in service).
 --   * Equipment can move technician-to-technician without passing through the
 --     warehouse; the 90-day deadline is inherited, not reset.
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 7: WORK ORDERS
--- ----------------------------------------------------------------------------
 
 -- Create a work order (always starts 'Pending').
 CREATE PROCEDURE sp_create_work_order(
@@ -1333,9 +1288,7 @@ RETURNS SETOF work_orders LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 8: INVOICES (warehouse dispatch) -- COMPOSITE / TRANSACTIONAL
--- ----------------------------------------------------------------------------
 
 -- Dispatch equipment + materials to a technician in a single atomic operation.
 -- Validates availability and stock, then creates the invoice and its lines,
@@ -1495,9 +1448,7 @@ END;
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 9: EQUIPMENT EXPIRY & TRANSFERS (design v2.0)
--- ----------------------------------------------------------------------------
 
 -- Flip 'Active' assignments whose deadline has passed to 'Expired'. Meant to
 -- run daily (cron / scheduler). Mutates nothing else; only raises UI alerts.
@@ -1707,9 +1658,7 @@ AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 10: LIQUIDATION / INSTALLATION DETAIL -- COMPOSITE
--- ----------------------------------------------------------------------------
 
 -- Declare what a technician actually installed on a job, in one atomic step.
 -- Accepts orders in Pending / In Progress / Escalated (an escalated order that
@@ -1829,9 +1778,7 @@ RETURNS SETOF installation_details LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 11: WARRANTY VISITS
--- ----------------------------------------------------------------------------
 
 -- Register a fault/warranty visit. The composite CHECK on warranty_visits keeps
 -- the inventory columns coherent with visit_type.
@@ -1908,9 +1855,7 @@ LANGUAGE sql AS $$
 $$;
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 12: INVENTORY RETURNS
--- ----------------------------------------------------------------------------
 
 -- Technician returns stock to the warehouse. Equipment goes back to 'Warehouse'
 -- (or 'Damaged'); materials add back to stock when reusable.
@@ -1980,18 +1925,13 @@ RETURNS SETOF inventory_returns LANGUAGE sql AS $$
     SELECT * FROM inventory_returns
      WHERE warehouse_user_id = p_warehouse_user_id ORDER BY return_date DESC;
 $$;
--- ============================================================================
 -- PROCONTEL - Stored routines, part 4: management reports
--- ----------------------------------------------------------------------------
 -- Read-only reporting functions used by the desktop app and ad-hoc queries.
 -- The BI layer (see 04_views.sql) covers dashboard needs; these target the
 -- operational screens and audit defenses.
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- SECTION 13: REPORTS
--- ----------------------------------------------------------------------------
 
 -- Warehouse equipment on hand, grouped by device type.
 CREATE FUNCTION fn_report_warehouse_equipment()
@@ -2143,20 +2083,15 @@ LANGUAGE sql AS $$
      ORDER BY logged_at DESC;
 $$;
 
--- ############################################################################
 -- SECTION C  -  TRIGGERS
--- ############################################################################
 
--- ============================================================================
 -- PROCONTEL - Audit triggers
--- ----------------------------------------------------------------------------
 -- PostgreSQL splits a trigger into a trigger FUNCTION (the body) and the
 -- CREATE TRIGGER that binds it to a table/event. These triggers capture the
 -- "physical" state changes that matter most in audits, regardless of whether
 -- the change came through a routine or a direct UPDATE.
 --
 -- current_user stands in for the SQL Server SUSER_SNAME() used originally.
--- ============================================================================
 
 
 -- Capture status changes on serialized_equipment.
@@ -2229,24 +2164,17 @@ CREATE TRIGGER trg_order_status_audit
     FOR EACH ROW
     EXECUTE FUNCTION trg_fn_order_status_audit();
 
--- ############################################################################
 -- SECTION D  -  VIEWS
--- ############################################################################
 
--- ============================================================================
 -- PROCONTEL - Analytical views (BI layer)
--- ----------------------------------------------------------------------------
 -- Views consumed by the BI tool. They are intentionally wide and partly
 -- denormalized: a BI model prefers a few wide tables over many narrow ones.
 --   * vw_dim_*   : dimension tables (slicers / filters)
 --   * vw_fact_*  : one row per event (BI aggregates dynamically -> drill-down)
 --   * vw_kpi_*   : pre-aggregated figures for dashboard cards
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- DIMENSIONS
--- ----------------------------------------------------------------------------
 
 -- Technician dimension enriched with computed age / age band.
 CREATE VIEW vw_dim_technician AS
@@ -2293,9 +2221,7 @@ LEFT JOIN invoices i    ON i.invoice_number = ea.invoice_number
 LEFT JOIN technicians t ON t.technician_id = i.technician_id;
 
 
--- ----------------------------------------------------------------------------
 -- FACT TABLES (one row = one event)
--- ----------------------------------------------------------------------------
 
 -- One row per work order, with flattened date parts and measure flags.
 CREATE VIEW vw_fact_orders AS
@@ -2427,9 +2353,7 @@ FROM inventory_returns r
 JOIN technicians t ON t.technician_id = r.technician_id;
 
 
--- ----------------------------------------------------------------------------
 -- KPI VIEWS (pre-aggregated for dashboard cards)
--- ----------------------------------------------------------------------------
 
 -- Inventory health: count by device type and status.
 CREATE VIEW vw_kpi_inventory_global AS
@@ -2540,22 +2464,15 @@ JOIN technicians t  ON t.technician_id = d.technician_id
 JOIN work_orders o  ON o.request_number = d.request_number
 WHERE d.warehouse_validated = FALSE;
 
--- ############################################################################
 -- SECTION E  -  RBAC SEED
--- ############################################################################
 
--- ============================================================================
 -- PROCONTEL - RBAC seed data
--- ----------------------------------------------------------------------------
 -- System data (not test data): the five business roles, the atomic permission
 -- catalog grouped by module, and the role->permission grants. Permission codes
 -- follow a "Module.Action" convention so the app can check them by string.
--- ============================================================================
 
 
--- ----------------------------------------------------------------------------
 -- ROLES (5 business roles)
--- ----------------------------------------------------------------------------
 INSERT INTO roles (role_name, description) VALUES
     ('Manager',        'General manager. Full system access, management reports, user administration.'),
     ('WarehouseLead',  'Warehouse lead. Inventory oversight, audit responses, CRUD on equipment/materials.'),
@@ -2564,9 +2481,7 @@ INSERT INTO roles (role_name, description) VALUES
     ('Auditor',        'Auditor. Read-only access for internal or external review.');
 
 
--- ----------------------------------------------------------------------------
 -- PERMISSIONS (atomic, grouped by module)
--- ----------------------------------------------------------------------------
 INSERT INTO permissions (permission_code, module, description) VALUES
     -- Users
     ('User.Create',         'Users',     'Create system users'),
@@ -2623,9 +2538,7 @@ INSERT INTO permissions (permission_code, module, description) VALUES
     ('Report.Management',    'Reports', 'View management & financial reports');
 
 
--- ----------------------------------------------------------------------------
 -- ROLE -> PERMISSION GRANTS
--- ----------------------------------------------------------------------------
 
 -- Manager: everything.
 INSERT INTO role_permissions (role_id, permission_id)

@@ -1,25 +1,21 @@
-/* ============================================================================
+/*
    PROYECTO:   PROCONTEL - Sistema de Trazabilidad de Inventario
    VERSION:    2.0 (COMBINADO: Estructura + SP + Cambios V2.0)
    FECHA:      Mayo 2026
    SGBD:       Microsoft SQL Server 2019+
    ARCHIVO:    PROCONTEL_COMPLETO.sql
-   ============================================================================
    CONTENIDO (en orden de ejecucion):
      PARTE 1: Estructura  -> BD, tablas, indices, triggers y vistas
      PARTE 2: SP          -> Tipos TVP, datos RBAC y procedimientos base
      PARTE 3: Cambios V2.0 -> Estado Escalada, vencimiento de equipos,
                               traspasos entre tecnicos y SP nuevos/ajustados
-   ============================================================================
    USO: Abrir en SSMS y presionar F5. El script es RE-EJECUTABLE: si la base
         [Procontel] ya existe, la elimina y la vuelve a crear desde cero.
         Luego de correr este archivo, ejecutar el de LLENADO por separado.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- PASO 0: Eliminar la base si ya existe (hace el script re-ejecutable con F5).
 -- Se ejecuta desde [master] y fuerza SINGLE_USER para cerrar conexiones.
--- ----------------------------------------------------------------------------
 USE [master]
 GO
 
@@ -31,13 +27,11 @@ END
 GO
 
 
-/* ############################################################################
-   ############################################################################
+/*
    PARTE 1 de 3: ESTRUCTURA DE LA BASE DE DATOS
    (Origen: PROCONTEL_DB_LIMPIO.sql)
    - CREATE DATABASE, tablas, indices, triggers y vistas.
-   ############################################################################
-   ############################################################################ */
+   */
 
 CREATE DATABASE [Procontel]
 GO
@@ -51,9 +45,9 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 
-/* ============================================================================
+/*
    SECCION 1: SEGURIDAD Y CONTROL DE ACCESO (RBAC)
-   ============================================================================ */
+   */
 
 -- Roles
 CREATE TABLE [dbo].[Roles] (
@@ -139,9 +133,9 @@ CREATE TABLE [dbo].[UsuariosRoles] (
 GO
 
 
-/* ============================================================================
+/*
    SECCION 2: CATALOGOS MAESTROS
-   ============================================================================ */
+   */
 
 -- Tecnicos (incluye CodigoCuadrilla PRO01-PRO999)
 CREATE TABLE [dbo].[Tecnicos] (
@@ -235,9 +229,9 @@ CREATE TABLE [dbo].[MaterialesMiscelaneos] (
 GO
 
 
-/* ============================================================================
+/*
    SECCION 3: TABLAS TRANSACCIONALES
-   ============================================================================ */
+   */
 
 -- Ordenes de trabajo (solicitudes de Claro)
 CREATE TABLE [dbo].[OrdenesTrabajo] (
@@ -495,9 +489,9 @@ CREATE TABLE [dbo].[DevolucionInventario] (
 GO
 
 
-/* ============================================================================
+/*
    SECCION 4: AUDITORIA
-   ============================================================================ */
+   */
 
 -- Bitacora de auditoria (registro historico de acciones en el sistema)
 CREATE TABLE [dbo].[BitacoraAuditoria] (
@@ -521,9 +515,9 @@ CREATE TABLE [dbo].[BitacoraAuditoria] (
 GO
 
 
-/* ============================================================================
+/*
    SECCION 5: INDICES
-   ============================================================================ */
+   */
 
 -- Bitacora: consultas por tabla/fecha y por usuario/fecha
 CREATE NONCLUSTERED INDEX [IX_BitacoraAuditoria_TablaFecha]
@@ -585,20 +579,18 @@ CREATE NONCLUSTERED INDEX [IX_Usuarios_CodigoTecnico]
     WHERE [CodigoTecnico] IS NOT NULL
 GO
 
-/* ============================================================================
+/*
    FIN DEL SCRIPT
-   ============================================================================ */
+   */
 
-/* ============================================================================
+/*
    SECCION 1: TRIGGERS DE AUDITORIA FISICA
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- TRIGGER: Captura cambios de EstadoEquipo en EquiposSeriados.
 -- Se dispara en cualquier UPDATE de la columna EstadoEquipo, venga de un
 -- SP o de un UPDATE directo. Usa SUSER_SNAME() para identificar al login
 -- de SQL Server cuando no hay un usuario de aplicacion identificado.
--- ----------------------------------------------------------------------------
 CREATE TRIGGER [dbo].[trg_EquiposSeriados_EstadoEquipo]
 ON [dbo].[EquiposSeriados]
 AFTER UPDATE
@@ -629,10 +621,8 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- TRIGGER: Captura cambios de StockBodega en MaterialesMiscelaneos.
 -- Critico para auditoria: el stock es lo que mas cuestiona Claro.
--- ----------------------------------------------------------------------------
 CREATE TRIGGER [dbo].[trg_MaterialesMiscelaneos_Stock]
 ON [dbo].[MaterialesMiscelaneos]
 AFTER UPDATE
@@ -662,11 +652,9 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- TRIGGER: Captura cambios de EstadoOrden en OrdenesTrabajo.
 -- Permite reconstruir la linea de tiempo de cada orden a partir de
 -- la bitacora, util para reportes de SLA.
--- ----------------------------------------------------------------------------
 CREATE TRIGGER [dbo].[trg_OrdenesTrabajo_EstadoOrden]
 ON [dbo].[OrdenesTrabajo]
 AFTER UPDATE
@@ -697,18 +685,15 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 2: VISTAS DE DIMENSION (para slicers/filtros en Power BI)
-   ============================================================================
    Estas vistas se conectan a Power BI como tablas de dimension. Son
    "anchas" y desnormalizadas a proposito: Power BI prefiere pocas tablas
    con muchas columnas que muchas tablas con joins.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- VISTA: Dimension Tecnico enriquecida con campos calculados.
 -- Edad y AntiguedadAnios permiten slicers por rango etario o seniority.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_DimTecnico]
 AS
 SELECT
@@ -735,10 +720,8 @@ SELECT
 FROM [dbo].[Tecnicos] T;
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA: Dimension Equipo enriquecida con tecnico actual asignado.
 -- Hace LEFT JOIN al tecnico solo si el equipo esta en estado Asignado.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_DimEquipo]
 AS
 SELECT
@@ -760,17 +743,14 @@ LEFT JOIN [dbo].[Tecnicos] T     ON T.[CodigoTecnico] = F.[CodigoTecnico];
 GO
 
 
-/* ============================================================================
+/*
    SECCION 3: VISTAS DE HECHOS DETALLADOS (sin agregar)
-   ============================================================================
    Una fila = un evento. Power BI agrega dinamicamente con sus medidas.
    Esto es lo que permite drill-down en los dashboards.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- VISTA DE HECHOS: Cada fila es una orden de trabajo con todos sus campos
 -- y dimensiones planas (tecnico, fechas calculadas).
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_HechosOrdenes]
 AS
 SELECT
@@ -797,11 +777,9 @@ FROM [dbo].[OrdenesTrabajo] O
 INNER JOIN [dbo].[Tecnicos] T ON T.[CodigoTecnico] = O.[CodigoTecnico];
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA DE HECHOS: Cada fila es un detalle de instalacion (equipo o
 -- material). Granularidad maxima: permite a Power BI agregar por tecnico,
 -- material, fecha, tecnologia, etc.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_HechosInstalaciones]
 AS
 SELECT
@@ -838,10 +816,8 @@ LEFT JOIN [dbo].[EquiposSeriados] ES       ON ES.[NumeroSerie]    = DI.[NumeroSe
 LEFT JOIN [dbo].[MaterialesMiscelaneos] MM ON MM.[CodigoMaterial] = DI.[CodigoMaterial];
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA DE HECHOS: Cada fila es una averia. Permite reportes de
 -- garantia, tipos de visita, problemas mas frecuentes.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_HechosAverias]
 AS
 SELECT
@@ -873,11 +849,9 @@ INNER JOIN [dbo].[Tecnicos] T       ON T.[CodigoTecnico]   = AG.[CodigoTecnico]
 INNER JOIN [dbo].[OrdenesTrabajo] O ON O.[NumeroSolicitud] = AG.[NumeroSolicitud];
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA DE HECHOS: Movimientos de inventario consolidados.
 -- Cada fila es una entrega (factura) o devolucion. Util para grafico
 -- de flujo de inventario en el dashboard.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_HechosMovimientosInventario]
 AS
 -- Entregas (facturas)
@@ -932,16 +906,13 @@ INNER JOIN [dbo].[Tecnicos] T ON T.[CodigoTecnico] = DEV.[CodigoTecnico];
 GO
 
 
-/* ============================================================================
+/*
    SECCION 4: VISTAS GERENCIALES (para tarjetas/KPIs en Power BI)
-   ============================================================================
    Vistas con calculos agregados pre-hechos para los KPIs grandes del
    dashboard ejecutivo. Power BI las consume como cards.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- VISTA: Resumen de inventario por estado para card de "salud de bodega".
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_KPIInventarioGlobal]
 AS
 SELECT
@@ -952,10 +923,8 @@ FROM [dbo].[EquiposSeriados] ES
 GROUP BY ES.[TipoAparato], ES.[EstadoEquipo];
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA: Productividad acumulada por tecnico (sin filtro de fecha).
 -- Power BI puede filtrar por fecha desde la dimension de fecha.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_KPIProductividadTecnico]
 AS
 SELECT
@@ -979,12 +948,10 @@ LEFT JOIN [dbo].[OrdenesTrabajo] O ON O.[CodigoTecnico] = T.[CodigoTecnico]
 GROUP BY T.[CodigoTecnico], T.[CodigoCuadrilla], T.[Nombre], T.[Apellido], T.[EstadoLaboral];
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA: Discrepancias activas. Equipos asignados a tecnicos que no
 -- estan instalados ni devueltos. Mismo concepto del SP de discrepancias
 -- pero como vista para que Power BI la consuma como tabla.
 -- ESTE ES EL REPORTE MAS POLITICO: Claro pregunta esto en cada auditoria.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_KPIDiscrepancias]
 AS
 SELECT
@@ -1018,10 +985,8 @@ WHERE AE.[EstadoAsignacion] = 'Activa'
   );
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA: Materiales con su nivel de stock clasificado.
 -- Para semaforo de bodega en Power BI: rojo/amarillo/verde.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_KPIStockMateriales]
 AS
 SELECT
@@ -1061,10 +1026,8 @@ SELECT
 FROM [dbo].[MaterialesMiscelaneos] MM;
 GO
 
--- ----------------------------------------------------------------------------
 -- VISTA: Liquidaciones pendientes de validacion bodega (cuello de
 -- botella operativo). Permite ver con que tecnico y cuanto tiempo lleva.
--- ----------------------------------------------------------------------------
 CREATE VIEW [dbo].[vw_KPILiquidacionesPendientes]
 AS
 SELECT
@@ -1084,25 +1047,22 @@ INNER JOIN [dbo].[OrdenesTrabajo] O ON O.[NumeroSolicitud] = DI.[NumeroSolicitud
 WHERE DI.[ValidadoBodega] = 'NO';
 GO
 
-/* ############################################################################
-   ############################################################################
+/*
    PARTE 2 de 3: PROCEDIMIENTOS ALMACENADOS Y TIPOS
    (Origen: PROCONTEL_SP.sql)
    - Tipos TVP, datos iniciales de RBAC y todos los SP base.
-   ############################################################################
-   ############################################################################ */
+   */
 
 USE [Procontel]
 GO
 
 
-/* ============================================================================
+/*
    SECCION 0: TIPOS DE DATOS (TABLE-VALUED PARAMETERS)
-   ============================================================================
    Los TVP permiten pasar tablas completas como parametro de un SP.
    Se usan en los SP que crean facturas y liquidaciones, que reciben
    listas de equipos y materiales.
-   ============================================================================ */
+   */
 
 -- TVP para listas de equipos seriados
 CREATE TYPE [dbo].[TVP_EquiposSeriados] AS TABLE (
@@ -1118,17 +1078,14 @@ CREATE TYPE [dbo].[TVP_Materiales] AS TABLE (
 GO
 
 
-/* ============================================================================
+/*
    SECCION 1: DATOS INICIALES DE RBAC
-   ============================================================================
    Roles, Permisos y asignaciones Rol-Permiso iniciales del sistema.
    Estos datos son parte del sistema, no son datos operativos, por eso
    se cargan junto con los SP.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- INSERTS DE ROLES (5 roles segun definicion del negocio)
--- ----------------------------------------------------------------------------
 INSERT INTO [dbo].[Roles] ([NombreRol], [Descripcion]) VALUES
     ('Gerente',      'Gerente General. Acceso total al sistema, reportes gerenciales y administracion de usuarios.'),
     ('JefeBodega',   'Jefe de Bodega. Supervision de inventario, respuesta a Claro, CRUD de equipos y materiales.'),
@@ -1137,9 +1094,7 @@ INSERT INTO [dbo].[Roles] ([NombreRol], [Descripcion]) VALUES
     ('Auditor',      'Auditor. Solo lectura para revision interna o externa (Claro, contraloria).')
 GO
 
--- ----------------------------------------------------------------------------
 -- INSERTS DE PERMISOS (permisos atomicos agrupados por modulo)
--- ----------------------------------------------------------------------------
 INSERT INTO [dbo].[Permisos] ([CodigoPermiso], [Modulo], [Descripcion]) VALUES
     -- Modulo: Usuarios
     ('Usuario.Crear',              'Usuarios',  'Crear nuevos usuarios del sistema'),
@@ -1207,9 +1162,7 @@ INSERT INTO [dbo].[Permisos] ([CodigoPermiso], [Modulo], [Descripcion]) VALUES
     ('Reporte.Gerencial',          'Reportes',  'Ver reportes gerenciales y financieros')
 GO
 
--- ----------------------------------------------------------------------------
 -- ASIGNACION DE PERMISOS A ROLES
--- ----------------------------------------------------------------------------
 
 -- GERENTE: acceso total. Se asignan TODOS los permisos.
 INSERT INTO [dbo].[RolesPermisos] ([IDRol], [IDPermiso])
@@ -1296,13 +1249,11 @@ WHERE R.NombreRol = 'Auditor'
 GO
 
 
-/* ============================================================================
+/*
    SECCION 2: SP DE SEGURIDAD Y BITACORA
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- SP interno llamado desde los demas. Registra una accion en la bitacora.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RegistrarBitacora]
     @TablaAfectada   NVARCHAR(50),
     @TipoOperacion   CHAR(1),
@@ -1329,10 +1280,8 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Autentica un usuario. Devuelve ID, login, nombres y roles si es valido.
 -- No revela si el error fue por usuario o contrasena.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AutenticarUsuario]
     @UsuarioLogin  VARCHAR(20),
     @PasswordHash  VARCHAR(128)
@@ -1378,9 +1327,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Cambia la contrasena de un usuario validando la actual primero.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarPassword]
     @UsuarioLogin       VARCHAR(20),
     @PasswordActual     VARCHAR(128),
@@ -1418,10 +1365,8 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Devuelve todos los permisos efectivos de un usuario (JOIN de sus roles).
 -- Este es el SP mas llamado: la app C# lo usa al login para cachear permisos.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarPermisosDeUsuario]
     @IDUsuario INT
 AS
@@ -1445,9 +1390,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta historial de cambios de un registro especifico.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarBitacoraPorRegistro]
     @TablaAfectada NVARCHAR(50),
     @RegistroID    NVARCHAR(50)
@@ -1466,9 +1409,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta todas las acciones realizadas por un usuario en un rango de fechas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarBitacoraPorUsuario]
     @UsuarioLogin VARCHAR(20),
     @FechaInicio  DATE,
@@ -1489,9 +1430,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Crea un nuevo rol en el catalogo. Solo Gerente puede ejecutarlo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_InsertarRol]
     @NombreRol    NVARCHAR(50),
     @Descripcion  NVARCHAR(200) = NULL,
@@ -1521,9 +1460,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Lista todos los roles activos del sistema.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarRoles]
 AS
 BEGIN
@@ -1535,9 +1472,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Asigna un rol a un usuario (relacion N:M).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AsignarRolAUsuario]
     @IDUsuario    INT,
     @IDRol        INT,
@@ -1572,9 +1507,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Remueve un rol de un usuario.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RemoverRolDeUsuario]
     @IDUsuario    INT,
     @IDRol        INT,
@@ -1607,9 +1540,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta los roles asignados a un usuario.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarRolesDeUsuario]
     @IDUsuario INT
 AS
@@ -1624,9 +1555,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Asigna un permiso a un rol.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AsignarPermisoARol]
     @IDRol        INT,
     @IDPermiso    INT,
@@ -1660,9 +1589,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Lista todos los permisos disponibles en el sistema.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarPermisos]
 AS
 BEGIN
@@ -1675,13 +1602,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 3: SP DE TECNICOS
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Inserta un nuevo tecnico. Los CHECK de BD validan formato.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_InsertarTecnico]
     @CodigoCuadrilla VARCHAR(10),
     @DUI             VARCHAR(10),
@@ -1729,9 +1654,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Actualiza datos de un tecnico (excepto DUI y CodigoCuadrilla que son fijos).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ActualizarTecnico]
     @CodigoTecnico   INT,
     @Nombre          NVARCHAR(50),
@@ -1777,9 +1700,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Cambia estado laboral del tecnico (Activo/Inactivo/Incapacitado).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarEstadoLaboralTecnico]
     @CodigoTecnico  INT,
     @NuevoEstado    NVARCHAR(15),
@@ -1820,9 +1741,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta todos los datos de un tecnico por su codigo interno.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarTecnicoPorCodigo]
     @CodigoTecnico INT
 AS
@@ -1835,9 +1754,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Busqueda de tecnico por numero de DUI.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarTecnicoPorDUI]
     @DUI VARCHAR(10)
 AS
@@ -1850,9 +1767,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Tecnicos con estado Activo. Para poblar dropdowns de la UI.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarTecnicosActivos]
 AS
 BEGIN
@@ -1865,9 +1780,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Listado general con filtro opcional por estado laboral.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarTecnicos]
     @EstadoLaboral NVARCHAR(15) = NULL
 AS
@@ -1883,13 +1796,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 4: SP DE USUARIOS
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Inserta un nuevo usuario. El password llega ya hasheado desde la app.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_InsertarUsuario]
     @UsuarioLoginNuevo  VARCHAR(20),
     @PasswordHash       VARCHAR(128),
@@ -1929,9 +1840,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Actualiza datos de un usuario (no toca password ni login).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ActualizarUsuario]
     @IDUsuario          INT,
     @Nombres            NVARCHAR(50),
@@ -1967,9 +1876,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Activa o desactiva un usuario (sin borrar). Soft delete.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarEstadoUsuario]
     @IDUsuario      INT,
     @NuevoEstado    NVARCHAR(15),
@@ -2010,9 +1917,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Devuelve datos de un usuario por su ID.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarUsuarioPorCodigo]
     @IDUsuario INT
 AS
@@ -2030,9 +1935,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Usuarios activos. Para poblar dropdowns de administracion.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarUsuariosActivos]
 AS
 BEGIN
@@ -2046,13 +1949,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 5: SP DE EQUIPOS SERIADOS
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Registra un equipo nuevo en bodega. Valida que la serie no exista.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_IngresarEquipoBodega]
     @NumeroSerie   VARCHAR(50),
     @Modelo        NVARCHAR(100),
@@ -2085,9 +1986,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Ingreso masivo de equipos via TVP. Transaccional: todo o nada. [COMPUESTO]
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_IngresarLoteEquipos]
     @Modelo        NVARCHAR(100),
     @TipoAparato   NVARCHAR(20),
@@ -2130,9 +2029,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Cambia estado de un equipo (Bodega/Asignado/Instalado/Danado/Garantia).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarEstadoEquipo]
     @NumeroSerie    VARCHAR(50),
     @NuevoEstado    NVARCHAR(15),
@@ -2173,9 +2070,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Devuelve datos del equipo + estado + tecnico asignado si aplica.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarEquipoPorSerie]
     @NumeroSerie VARCHAR(50)
 AS
@@ -2195,9 +2090,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Equipos en estado Bodega filtrados por tipo de aparato.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarEquiposDisponibles]
     @TipoAparato NVARCHAR(20) = NULL
 AS
@@ -2212,9 +2105,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Equipos actualmente asignados a un tecnico (asignacion Activa).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarEquiposPorTecnico]
     @CodigoTecnico INT
 AS
@@ -2234,13 +2125,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 6: SP DE MATERIALES MISCELANEOS
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Inserta un nuevo material en el catalogo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_InsertarMaterial]
     @CodigoMaterial VARCHAR(15),
     @NombreMaterial NVARCHAR(100),
@@ -2268,9 +2157,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Actualiza nombre y unidad de medida de un material.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ActualizarMaterial]
     @CodigoMaterial VARCHAR(15),
     @NombreMaterial NVARCHAR(100),
@@ -2304,9 +2191,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Suma o resta stock de un material. Valida que no quede negativo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AjustarStockMaterial]
     @CodigoMaterial VARCHAR(15),
     @Ajuste         DECIMAL(10,2),
@@ -2360,9 +2245,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta datos de un material + stock actual.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarMaterialPorCodigo]
     @CodigoMaterial VARCHAR(15)
 AS
@@ -2375,9 +2258,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Lista materiales con stock disponible mayor a cero.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarMaterialesConStock]
 AS
 BEGIN
@@ -2390,9 +2271,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Materiales con stock por debajo de un umbral. Para alertas de reabasto.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarMaterialesBajoStock]
     @Umbral DECIMAL(10,2)
 AS
@@ -2407,13 +2286,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 7: SP DE ORDENES DE TRABAJO
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Crea una nueva orden en estado Pendiente. Valida que el tecnico este Activo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CrearOrdenTrabajo]
     @NumeroSolicitud       VARCHAR(20),
     @CodigoTecnico         INT,
@@ -2466,9 +2343,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Reasigna una orden a otro tecnico. Valida que el nuevo tecnico este Activo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AsignarTecnicoAOrden]
     @NumeroSolicitud   VARCHAR(20),
     @NuevoTecnico      INT,
@@ -2524,9 +2399,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Cambia estado de una orden. Valida transiciones logicas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarEstadoOrden]
     @NumeroSolicitud   VARCHAR(20),
     @NuevoEstado       NVARCHAR(20),
@@ -2590,9 +2463,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta una orden completa + datos del tecnico asignado.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarOrdenPorNumero]
     @NumeroSolicitud VARCHAR(20)
 AS
@@ -2610,9 +2481,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Ordenes de un tecnico con filtro opcional por estado.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarOrdenesPorTecnico]
     @CodigoTecnico INT,
     @EstadoOrden   NVARCHAR(20) = NULL
@@ -2629,9 +2498,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Todas las ordenes en un estado especifico.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarOrdenesPorEstado]
     @EstadoOrden NVARCHAR(20)
 AS
@@ -2648,9 +2515,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Pendientes y En Proceso del dia agrupadas por tecnico. Dashboard diario.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarOrdenesPendientesDelDia]
 AS
 BEGIN
@@ -2669,17 +2534,14 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 8: SP DE FACTURAS Y ASIGNACIONES
-   ============================================================================
    Modulo mas critico transaccionalmente. Todos los SP con operaciones
    multi-tabla estan marcados con [COMPUESTO] y usan BEGIN TRAN.
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- EL SP MAS IMPORTANTE. Crea factura + asigna equipos y materiales. [COMPUESTO]
 -- Recibe TVPs, actualiza estados, descuenta stock. Todo atomico.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CrearFacturaCompleta]
     @CodigoTecnico    INT,
     @IDUsuarioBodega  INT,
@@ -2780,9 +2642,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Consulta factura completa: encabezado + equipos + materiales (3 result sets).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarFacturaCompleta]
     @NumeroFactura INT
 AS
@@ -2815,9 +2675,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Facturas de un tecnico con filtro opcional por fechas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarFacturasPorTecnico]
     @CodigoTecnico INT,
     @FechaInicio   DATE = NULL,
@@ -2837,9 +2695,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Facturas emitidas por un bodeguero. Auditoria de quien despacho que.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarFacturasPorBodeguero]
     @IDUsuarioBodega INT,
     @FechaInicio     DATE = NULL,
@@ -2860,10 +2716,8 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Anula factura: marca asignaciones devueltas, regresa equipos y stock. [COMPUESTO]
 -- Motivo obligatorio. Solo ejecutar con permiso Factura.Anular.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_AnularFactura]
     @NumeroFactura INT,
     @Motivo        NVARCHAR(200),
@@ -2922,9 +2776,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Marca una asignacion de equipo individual como devuelta.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_MarcarAsignacionDevuelta]
     @IDRegistro    INT,
     @UsuarioLogin  VARCHAR(20)
@@ -2958,14 +2810,12 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 9: SP DE LIQUIDACION / DETALLE DE INSTALACION
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Tecnico cierra una orden. Transaccional: inserta detalles + cambia estados. [COMPUESTO]
 -- Valida que cada equipo instalado este asignado al tecnico actualmente.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RegistrarLiquidacionOrden]
     @NumeroSolicitud    VARCHAR(20),
     @CodigoTecnico      INT,
@@ -3057,9 +2907,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Bodega revisa y marca la liquidacion como validada. Cierra el ciclo.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ValidarLiquidacionPorBodega]
     @IDDetalle     INT,
     @UsuarioLogin  VARCHAR(20)
@@ -3093,9 +2941,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Devuelve que se instalo y que se consumio en una orden.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarDetalleOrden]
     @NumeroSolicitud VARCHAR(20)
 AS
@@ -3115,9 +2961,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Detalles de instalacion que no han sido validados por bodega aun.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarLiquidacionesPendientesValidacion]
 AS
 BEGIN
@@ -3135,9 +2979,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Liquidaciones registradas por un tecnico en un rango de fechas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarLiquidacionesPorTecnico]
     @CodigoTecnico INT,
     @FechaInicio   DATE,
@@ -3158,14 +3000,12 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 10: SP DE AVERIAS Y GARANTIAS
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Registra visita de soporte. El CHECK de BD valida coherencia tipo-inventario.
 -- Si hay cambio de equipo: nuevo -> Instalado, retirado -> Danado/Garantia. [COMPUESTO]
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RegistrarAveria]
     @NumeroTicket           VARCHAR(20),
     @NumeroSolicitud        VARCHAR(20),
@@ -3247,9 +3087,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Averias asociadas a una orden original (historial de problemas).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarAveriasPorOrden]
     @NumeroSolicitud VARCHAR(20)
 AS
@@ -3269,9 +3107,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Averias atendidas por un tecnico en un rango de fechas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarAveriasPorTecnico]
     @CodigoTecnico INT,
     @FechaInicio   DATE,
@@ -3290,9 +3126,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Ordenes completadas hace menos de 3 meses con averias reportadas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarAveriasDentroDeGarantia]
 AS
 BEGIN
@@ -3310,14 +3144,12 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 11: SP DE DEVOLUCIONES DE INVENTARIO
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Tecnico devuelve equipo/material. Actualiza stock y estados. [COMPUESTO]
 -- Bueno -> Bodega, Danado/Fabrica -> Garantia, Danado/Uso -> Danado.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RegistrarDevolucion]
     @CodigoTecnico      INT,
     @IDUsuarioBodega    INT,
@@ -3397,9 +3229,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Historial de devoluciones de un tecnico en un rango de fechas.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarDevolucionesPorTecnico]
     @CodigoTecnico INT,
     @FechaInicio   DATE = NULL,
@@ -3425,9 +3255,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Devoluciones recibidas por un bodeguero. Auditoria de recepcion.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarDevolucionesPorBodeguero]
     @IDUsuarioBodega INT,
     @FechaInicio     DATE = NULL,
@@ -3452,13 +3280,11 @@ END
 GO
 
 
-/* ============================================================================
+/*
    SECCION 12: SP DE REPORTES Y CONSULTAS GERENCIALES
-   ============================================================================ */
+   */
 
--- ----------------------------------------------------------------------------
 -- Inventario disponible en bodega agrupado por tipo de aparato.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteInventarioBodega]
 AS
 BEGIN
@@ -3478,9 +3304,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Equipos asignados actualmente y a que tecnico estan.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteInventarioEnPoderTecnicos]
 AS
 BEGIN
@@ -3500,9 +3324,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- CLAVE PARA DEFENSA DEL TECNICO. Equipos asignados NO instalados NI devueltos.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteDiscrepanciasTecnico]
     @CodigoTecnico INT,
     @FechaInicio   DATE,
@@ -3538,9 +3360,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Productividad: ordenes completadas por tecnico con suma de cobros.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteProductividadTecnico]
     @FechaInicio DATE,
     @FechaFin    DATE
@@ -3564,9 +3384,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Material mas consumido agrupado por tipo de tecnologia instalada.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteConsumoMateriales]
     @FechaInicio DATE,
     @FechaFin    DATE
@@ -3588,9 +3406,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Ordenes completadas sin validacion de bodega. Alertas de seguimiento.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteLiquidacionesPendientes]
 AS
 BEGIN
@@ -3611,9 +3427,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Equipos en estado Danado con la fecha de cambio mas reciente.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteEquiposDanados]
 AS
 BEGIN
@@ -3634,9 +3448,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Trazabilidad de una factura: despacho + instalaciones + devoluciones.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteFlujoFactura]
     @NumeroFactura INT
 AS
@@ -3682,9 +3494,7 @@ BEGIN
 END
 GO
 
--- ----------------------------------------------------------------------------
 -- Historial completo de un equipo por numero de serie desde la bitacora.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ReporteAuditoriaMovimientos]
     @NumeroSerie VARCHAR(50)
 AS
@@ -3703,9 +3513,8 @@ END
 GO
 
 
-/* ============================================================================
+/*
    FIN DEL SCRIPT DE PROCEDIMIENTOS ALMACENADOS
-   ============================================================================
    
    TOTAL DE OBJETOS CREADOS:
    
@@ -3731,16 +3540,14 @@ GO
      Devoluciones:                     3
      Reportes Gerenciales:             9
    
-   ============================================================================ */
+   */
 
-/* ############################################################################
-   ############################################################################
+/*
    PARTE 3 de 3: CAMBIOS V2.0
    (Origen: CAMBIOS_PROCONTEL_V2_0.sql  - typo @UsujarioLogin corregido)
    - Estado 'Escalada', FechaVencimiento, tabla TraspasoEquipos,
      SP nuevos y los 3 SP ajustados (drop + recreate).
-   ############################################################################
-   ############################################################################ */
+   */
 
 USE [Procontel]
 GO
@@ -3899,10 +3706,8 @@ IF OBJECT_ID('[dbo].[usp_CrearFacturaCompleta]', 'P') IS NOT NULL
     DROP PROCEDURE [dbo].[usp_CrearFacturaCompleta]
 GO
 
--- ----------------------------------------------------------------------------
 -- AJUSTADO: Ahora llena FechaVencimiento (FechaFactura + 90 dias).
 -- Lo demas se mantiene identico.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CrearFacturaCompleta]
     @CodigoTecnico    INT,
     @IDUsuarioBodega  INT,
@@ -4017,7 +3822,6 @@ IF OBJECT_ID('[dbo].[usp_CambiarEstadoOrden]', 'P') IS NOT NULL
     DROP PROCEDURE [dbo].[usp_CambiarEstadoOrden]
 GO
 
--- ----------------------------------------------------------------------------
 -- AJUSTADO: Ahora soporta el estado Escalada con sus transiciones validas.
 -- 
 -- Reglas de transicion:
@@ -4026,7 +3830,6 @@ GO
 --   Escalada    -> En Proceso (cuando vuelve para retomar), Completada
 --   Completada  -> (terminal)
 --   Cancelada   -> (terminal)
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_CambiarEstadoOrden]
     @NumeroSolicitud   VARCHAR(20),
     @NuevoEstado       NVARCHAR(20),
@@ -4103,11 +3906,9 @@ GO
 
 
 
--- ----------------------------------------------------------------------------
 -- NUEVO: Escala una orden con motivo registrado en bitacora.
 -- Es un atajo conveniente sobre usp_CambiarEstadoOrden que ademas exige
 -- el motivo de la escalacion (problema de sistema, error humano, etc.).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_EscalarOrden]
     @NumeroSolicitud   VARCHAR(20),
     @MotivoEscalacion  NVARCHAR(200),
@@ -4161,14 +3962,12 @@ GO
 
 
 
--- ----------------------------------------------------------------------------
 -- NUEVO: Marca como Vencidas las asignaciones cuya FechaVencimiento ya paso.
 -- Este SP debe correrse diariamente (job de SQL Agent o llamado desde la
 -- aplicacion C# al iniciar el dia).
 -- 
 -- No borra nada. Solo cambia el estado de Activa a Vencida para que el
 -- tecnico vea las alertas en la UI.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_MarcarEquiposVencidos]
     @UsuarioLogin VARCHAR(20) = 'SISTEMA'
 AS
@@ -4229,7 +4028,6 @@ GO
 
 
 
--- ----------------------------------------------------------------------------
 -- NUEVO: Lista equipos asignados a un tecnico que estan por vencer.
 -- 
 -- Devuelve clasificados por urgencia:
@@ -4241,7 +4039,6 @@ GO
 -- 
 -- Si @CodigoTecnico es NULL, devuelve para TODOS los tecnicos
 -- (uso del Jefe de Bodega).
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ListarEquiposPorVencer]
     @CodigoTecnico INT = NULL,
     @DiasMaximos   INT = 30   -- Solo mostrar los que vencen dentro de N dias
@@ -4286,7 +4083,6 @@ GO
 
 
 
--- ----------------------------------------------------------------------------
 -- EL SP MAS IMPORTANTE DE LA ENTREGA 2. [COMPUESTO TRANSACCIONAL]
 -- 
 -- Traspasa un equipo de un tecnico a otro SIN pasar por bodega.
@@ -4302,7 +4098,6 @@ GO
 --   4. Inserta el registro en TraspasoEquipos
 --   5. El equipo (EquiposSeriados) NO cambia de estado: sigue 'Asignado'.
 --   6. Bitacora.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_TraspasarEquipoEntreTecnicos]
     @NumeroSerie         VARCHAR(50),
     @CuadrillaOrigen     INT,
@@ -4460,10 +4255,8 @@ GO
 
 
 
--- ----------------------------------------------------------------------------
 -- NUEVO: Historial de traspasos de un equipo (cadena de custodia).
 -- Util cuando hay disputa o auditoria de Claro sobre un equipo especifico.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_ConsultarHistorialTraspasos]
     @NumeroSerie VARCHAR(50)
 AS
@@ -4500,14 +4293,12 @@ IF OBJECT_ID('[dbo].[usp_RegistrarLiquidacionOrden]', 'P') IS NOT NULL
     DROP PROCEDURE [dbo].[usp_RegistrarLiquidacionOrden]
 GO
 
--- ----------------------------------------------------------------------------
 -- AJUSTADO: Ahora permite liquidar desde estado Pendiente, En Proceso O Escalada.
 -- Esto es CRITICO: cuando una orden Escalada finalmente se pone en
 -- servicio, el tecnico debe poder declarar los equipos.
 -- 
 -- Tambien actualiza la asignacion del equipo a estado "Devuelta" (no
 -- 'Activa') porque ya fue instalado en casa del cliente.
--- ----------------------------------------------------------------------------
 CREATE PROCEDURE [dbo].[usp_RegistrarLiquidacionOrden]
     @NumeroSolicitud    VARCHAR(20),
     @CodigoTecnico      INT,

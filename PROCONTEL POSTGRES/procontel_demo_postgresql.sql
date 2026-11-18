@@ -1,6 +1,4 @@
--- ============================================================================
 --  PROCONTEL  -  Sample data load  (PostgreSQL)
--- ============================================================================
 --  Loads demo technicians, accounts, inventory, orders and field operations
 --  for testing the PostgreSQL schema and BI views.
 --
@@ -13,12 +11,9 @@
 --      row-by-row loops where possible; procedural blocks use DO $$ ... $$.
 --    - Randomness uses random()/md5(random()...) instead of T-SQL NEWID().
 --    - Dates span Dec 2025 .. Apr 2026 to give the BI views something to chart.
--- ============================================================================
 
 
--- ############################################################################
 -- SECTION 0: WIPE OPERATIONAL DATA (keeps structure)
--- ############################################################################
 -- TRUNCATE ... RESTART IDENTITY CASCADE clears the tables and resets every
 -- serial/identity column in one shot. Order does not matter with CASCADE.
 
@@ -40,9 +35,7 @@ TRUNCATE TABLE
 RESTART IDENTITY CASCADE;
 
 
--- ############################################################################
 -- SECTION 1: 39 TECHNICIANS
--- ############################################################################
 -- Generate 39 fictional technicians that match the schema's format checks.
 INSERT INTO technicians
     (crew_code, national_id, first_name, last_name, address, phone,
@@ -62,9 +55,7 @@ SELECT
 FROM generate_series(1, 39) AS demo(n);
 
 
--- ############################################################################
 -- SECTION 2: 5 ADMINISTRATIVE USERS + ROLE ASSIGNMENTS
--- ############################################################################
 -- Demo users remain locked. They are used to link inventory and audit records.
 INSERT INTO users
     (login, password_hash, first_name, last_name, email, technician_id, user_status)
@@ -87,9 +78,7 @@ FROM users u JOIN roles r ON
   OR (u.login = 'demo_auditor' AND r.role_name = 'Auditor');
 
 
--- ############################################################################
 -- SECTION 3: TECHNICIAN USER ACCOUNTS (one per technician)
--- ############################################################################
 -- Technician accounts use the crew code and remain locked in the demo.
 
 INSERT INTO users (login, password_hash, first_name, last_name, technician_id, user_status)
@@ -103,9 +92,7 @@ JOIN technicians t ON t.technician_id = u.technician_id
 CROSS JOIN roles r
 WHERE r.role_name = 'Technician';
 
--- ############################################################################
 -- SECTION 4: 44 CONSUMABLE MATERIALS
--- ############################################################################
 -- 44 consumable materials with opening stock.
 INSERT INTO materials (material_code, material_name, unit_of_measure, warehouse_stock) VALUES
     ('CAB-ALAMB-VVDA', 'ALAMBRE ACOMDA EXT. VVDA 1X2X22,642035AM', 'Meters', 2500.00),
@@ -153,9 +140,7 @@ INSERT INTO materials (material_code, material_name, unit_of_measure, warehouse_
     ('TAPS-DC9', 'TAPS DC-9', 'Units', 80.00),
     ('TOR-ROCA-10X18', 'TORNILLO CON ARANDELA PUNTA ROCA 10x18', 'Units', 4000.00);
 
--- ############################################################################
 -- SECTION 5: ~790 SERIALIZED UNITS (15 device models)
--- ############################################################################
 -- Each block generates N units with a model-specific serial prefix, zero-padded
 -- counter, status 'Warehouse' and a random received_date in the load window.
 -- helper: a random date between 2025-12-01 and 2026-04-30.
@@ -278,9 +263,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 6: 200 WORK ORDERS
--- ############################################################################
 -- Spread across the 5-month window. Status mix mirrors real operations:
 -- ~60% Completed, ~15% Cancelled, ~10% Escalated, ~10% In Progress, ~5% Pending.
 
@@ -349,9 +332,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 7: 120 DISPATCH INVOICES WITH ASSIGNMENTS
--- ############################################################################
 -- Each invoice: 3-10 serialized units + 4-9 materials.
 -- expires_on = invoice_date + 90 days (business rule). Equipment goes to
 -- 'Assigned'; material stock is decremented only when there is enough on hand.
@@ -441,9 +422,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 8: LIQUIDATIONS (installation_details)
--- ############################################################################
 -- For Completed orders only: install some assigned units (-> 'Installed', the
 -- assignment closes as 'Returned') and record material usage.
 
@@ -516,9 +495,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 9: WARRANTY VISITS (15)
--- ############################################################################
 -- A mix of the four visit types, each kept coherent with the inventory columns
 -- (the composite CHECK on warranty_visits enforces this). Falls back to
 -- 'Software Support' if no suitable unit/material is available.
@@ -620,9 +597,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 10: TECHNICIAN-TO-TECHNICIAN TRANSFERS (8)
--- ############################################################################
 -- Demonstrates moving a unit between crews without returning it to the
 -- warehouse. The new assignment INHERITS the original 90-day deadline.
 
@@ -689,9 +664,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 11: INVENTORY RETURNS (12)
--- ############################################################################
 -- Surplus material returns add back to stock; equipment returns flip the unit
 -- back to 'Warehouse' (or 'Damaged') and close the assignment.
 
@@ -748,9 +721,7 @@ BEGIN
 END $$;
 
 
--- ############################################################################
 -- SECTION 12: FINAL TOTALS
--- ############################################################################
 -- Quick row counts so you can confirm the load at a glance.
 
 SELECT 'technicians'           AS entity, count(*) AS rows FROM technicians
